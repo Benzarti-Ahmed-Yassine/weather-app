@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client Weather Display</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const ClientInterface = () => {
+      const [time, setTime] = useState("23:36");
+      const [date, setDate] = useState("2025-05-05");
+      const [city, setCity] = useState("Paris");
+      const [country, setCountry] = useState("France");
+      const [temperature, setTemperature] = useState("N/A");
+      const [humidity, setHumidity] = useState("N/A");
+      const [brightness, setBrightness] = useState(50);
+
+      useEffect(() => {
+        // Synchronisation via localStorage
+        const syncSettings = () => {
+          const savedSettings = localStorage.getItem("weatherSettings");
+          if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            setTime(settings.time || "23:36");
+            setDate(settings.date || "2025-05-05");
+            setCity(settings.city || "Paris");
+            setCountry(settings.country || "France");
+            setTemperature(settings.temperature || "N/A");
+            setHumidity(settings.humidity || "N/A");
+            setBrightness(settings.brightness || 50);
+          }
+        };
+
+        // Écouter les changements dans localStorage
+        window.addEventListener("storage", syncSettings);
+        syncSettings(); // Charger les données initiales
+
+        // Nettoyer l'écouteur
+        return () => window.removeEventListener("storage", syncSettings);
+      }, []);
+
+      return (
+        <div className="min-h-screen bg-gray-900 p-4 sm:p-6 flex flex-col items-center">
+          <div className="client-panel w-full max-w-md" style={{ opacity: brightness / 100 }}>
+            <h2 className="text-2xl font-bold mb-4 text-white">Client Display</h2>
+            <div className="text-6xl font-bold mb-4 text-white">{time}</div>
+            <div className="mb-2 text-white">Date: {date}</div>
+            <div className="mb-2 text-white">Weather in {city}, {country}: {temperature}</div>
+            <div className="mb-2 text-white">Humidity: {humidity}</div>
+            <div className="mb-2 text-white">Brightness: {brightness}%</div>
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ClientInterface />);
+  </script>
+</body>
+</html>
