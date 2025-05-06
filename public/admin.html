@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Weather Control</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const AdminInterface = () => {
+      const [location, setLocation] = useState("Paris");
+      const [city, setCity] = useState("Paris");
+      const [country, setCountry] = useState("FR");
+      const [time, setTime] = useState("23:36");
+      const [date, setDate] = useState("2025-05-05");
+      const [brightness, setBrightness] = useState(50);
+      const [voiceCommand, setVoiceCommand] = useState("");
+      const [temperature, setTemperature] = useState("N/A");
+      const [humidity, setHumidity] = useState("N/A");
+      const [error, setError] = useState("");
+      const [isListening, setIsListening] = useState(false);
+      const [ws, setWs] = useState(null);
+
+      const parseLocation = (input) => {
+        const parts = input.split(",").map(part => part.trim());
+        const city = parts[0];
+        const country = parts[1] || "";
+        return { city, country };
+      };
+
+      useEffect(() => {
+        const websocket = new WebSocket('ws://localhost:3000');
+        setWs(websocket);
+
+        websocket.onopen = () => {
+          console.log('Connected to WebSocket server');
+        };
+
+        websocket.onmessage = (event) => {
+          const { type, data, message } = JSON.parse(event.data);
+          if (type === 'settings') {
+            setCity(data.city || "Paris");
+            setCountry(data.country || "FR");
+            setLocation(data.city + (data.country ? `,${data.country}` : ""));
+            setTime(data.time || "23:36");
+            setDate(data.date || "2025-05-05");
+            setBrightness(data.brightness || 50);
+            setTemperature(data.temperature || "N/A");
+            setHumidity(data.humidity || "N/A");
+          } else if (type === 'error') {
+            setError(message);
+          }
+        };
+
+        websocket.onclose = () => {
+          console.log('Disconnected from WebSocket server');
+        };
+
+        return () => websocket.close();
+      }, []);
+
+      const sendUpdate = (updates) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'update', data: updates }));
+        }
+      };
+
+      const handleLocationChange = (e) => {
+        const newLocation = e.target.value;
+        setLocation(newLocation);
+        const { city, country } = parseLocation(newLocation);
+        setCity(city);
+        setCountry(country);
+        sendUpdate({ city, country, date, time });
+      };
+
+      const handleTimeChange = (e) => {
+        const newTime = e.target.value;
+        setTime(newTime);
+        sendUpdate({ city, country, date, time: newTime });
+      };
+
+      const handleDateChange = (e) => {
+        const newDate = e.target.value;
+        setDate(newDate);
+        sendUpdate({ city, country, date: newDate, time });
+      };
+
+      const handleBrightnessChange = (e) => {
+        const newBrightness = e.target.value;
+        setBrightness(newBrightness);
+        sendUpdate({ brightness: newBrightness });
+      };
+
+      const startListening = () => {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+          setIsListening(true);
+        };
+
+        recognition.onresult = (event) => {
+          const command = event.results[0][0].transcript.toLowerCase();
+          setVoiceCommand(command);
+          handleVoiceCommand();
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognition.start();
+      };
+
+      const handleVoiceCommand = () => {
+        const command = voiceCommand.toLowerCase();
+        if (command.includes("increase light")) {
+          const newBrightness = Math.min(100, parseInt(brightness) + 10);
+          setBrightness(newBrightness);
+          sendUpdate({ brightness: newBrightness });
+        } else if (command.includes("decrease light")) {
+          const newBrightness = Math.max(0, parseInt(brightness) - 10);
+          setBrightness(newBrightness);
+          sendUpdate({ brightness: newBrightness });
+        } else if (command.includes("weather")) {
+          sendUpdate({ city, country, date, time });
+        } else if (command.includes("time")) {
+          alert(`Current time: ${time}`);
+        }
+        setVoiceCommand("");
+      };
+
+      return (
+        <div className="admin-panel">
+          <h2 className="text-2xl font-bold mb-4 text-white">Admin Control Panel</h2>
+          <div className="mb-4">
+            <label className="block mb-1 text-white">Set Time:</label>
+            <input
+              type="time"
+              value={time}
+              onChange={handleTimeChange}
+              className="text-black"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 text-white">Set Date:</label>
+            <input
+              type="date"
+              value={date}
+              onChange={handleDateChange}
+              className="text-black"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 text-white">Enter Location for Weather (e.g., City or City,Country):</label>
+            <input
+              type="text"
+              value={location}
+              onChange={handleLocationChange}
+              placeholder="e.g., Paris, Tokyo, New York, London,UK"
+              className="text-black"
+            />
+            {error && <p className="text-red-500 mt-2">{error}</p>}
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 text-white">Lighting Brightness: {brightness}%</label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={brightness}
+              onChange={handleBrightnessChange}
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 text-white">Current Temperature:</label>
+            <p className="text-white">{temperature}</p>
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 text-white">Current Humidity:</label>
+            <p className="text-white">{humidity}</p>
+          </div>
+          <div className="mb-4">
+            <label className="block mb-1 text-white">Voice Command:</label>
+            <button
+              onClick={isListening ? null : startListening}
+              className={`mt-2 p-2 ${isListening ? 'bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'} rounded text-white w-full`}
+              disabled={isListening}
+            >
+              {isListening ? 'Listening...' : '🎙️ Start Voice Command'}
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AdminInterface />);
+  </script>
+</body>
+</html>
